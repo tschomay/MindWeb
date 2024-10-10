@@ -6,7 +6,7 @@ import GraphComponent from './GraphComponent';
 function App() {
   return (
     <div className="App">
-      <h1>Visual Documentation Tool</h1>
+      <h1>MindWeb - Interactive Mindmapping</h1>
       <GraphComponent />
     </div>
   );
