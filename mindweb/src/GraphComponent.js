@@ -3,15 +3,23 @@ import React, { useEffect, useRef, useState } from 'react';
 //import { DataSet, Network } from 'vis-network'; // Import DataSet and Network directly
 import { Network } from "vis-network/peer/esm/vis-network";
 import { DataSet } from "vis-data/peer/esm/vis-data"
+import ReactQuill from 'react-quill'; // Import Quill editor
+import 'react-quill/dist/quill.snow.css'; // Quill CSS
 
 const GraphComponent = () => {
   const containerRef = useRef(null);
   const [network, setNetwork] = useState(null); // Store the network instance
+  const [editorVisible, setEditorVisible] = useState(false); // To toggle editor visibility
+  const [selectedNodeId, setSelectedNodeId] = useState(null); // Track selected node
+  const [editorContent, setEditorContent] = useState(''); // Store editor content
+
+  const nodes = useRef(null); // Reference for nodes
+  const edges = useRef(null); // Reference for edges
   const expandedNodes = useRef({}); // Track expanded nodes
 
   useEffect(() => {
     // Define nodes and edges using the imported DataSet class
-    const nodes = new DataSet([
+    const initialNodes = new DataSet([
       { id: 1, label: 'Start', color: '#FF7518', font: { color: '#FFFFFF' } }, // Halloween colors
       { id: 2, label: 'Haunted Node', color: '#551A8B', font: { color: '#FFFFFF' } }, 
       { id: 3, label: 'Spider Node', color: '#000000', font: { color: '#FFFFFF' } },
@@ -19,16 +27,26 @@ const GraphComponent = () => {
       { id: 5, label: 'End', color: '#FF7518', font: { color: '#FFFFFF' } }
     ]);
 
-    const edges = new DataSet([
+    const initialEdges = new DataSet([
       { from: 1, to: 2 },
       { from: 1, to: 3 },
       { from: 2, to: 4 },
       { from: 2, to: 5 }
     ]);
 
+    nodes.current = initialNodes;
+    edges.current = initialEdges;
+
+    // Set all nodes as expanded initially
+    initialNodes.getIds().forEach(nodeId => {
+      expandedNodes.current[nodeId] = true;
+    });
+
+
     // Create the network
-    const data = { nodes, edges };
+    const data = { nodes: initialNodes, edges: initialEdges };
     const options = {
+
       layout: {
         hierarchical: {
           direction: "UD",
@@ -65,7 +83,8 @@ const GraphComponent = () => {
     const networkInstance = new Network(containerRef.current, data, options);
     setNetwork(networkInstance); // Save the network instance
 
-    // Event listener for node interaction
+
+    // Event listener for expanding/collapsing
     networkInstance.on('doubleClick', function (params) {
       if (params.nodes.length) {
         const nodeId = params.nodes[0];
@@ -73,10 +92,10 @@ const GraphComponent = () => {
 
         if (isExpanded) {
           // If expanded, collapse the node (remove children)
-          collapseNode(nodeId, nodes, edges);
+          collapseNode(nodeId);
         } else {
           // If not expanded, expand the node (add children)
-          expandNode(nodeId, nodes, edges);
+          expandNode(nodeId);
         }
 
         // Toggle the expanded state
@@ -84,34 +103,154 @@ const GraphComponent = () => {
       }
     });
 
+    // Handle click for selecting a node
+    networkInstance.on('click', (params) => {
+      if (params.nodes.length) {
+        const nodeId = params.nodes[0];
+        setSelectedNodeId(nodeId);
+      } else {
+        setSelectedNodeId(null); // Clear selection when clicking outside nodes
+      }
+    });
+
+    
+    // // Event listener for editing
+    // networkInstance.on('doubleClick', (params) => {
+    //   if (params.nodes.length) {
+    //     const nodeId = params.nodes[0];
+
+    //     // Open the rich text editor for the selected node
+    //     setSelectedNodeId(nodeId);
+    //     const node = nodes.current.get(nodeId);
+    //     setEditorContent(node.label); // Set the current label as editor content
+    //     setEditorVisible(true); // Show editor
+    //   }
+    // });
+
   }, []);
 
-  // Function to add child nodes and edges dynamically
-  const expandNode = (nodeId, nodes, edges) => {
-    const newNodes = [
-      { id: nodeId * 10 + 1, label: `Child of ${nodeId}`, color: '#FF7518' },
-      { id: nodeId * 10 + 2, label: `Another Child of ${nodeId}`, color: '#FF7518' }
-    ];
-    const newEdges = [
-      { from: nodeId, to: nodeId * 10 + 1 },
-      { from: nodeId, to: nodeId * 10 + 2 }
-    ];
 
-    nodes.add(newNodes); // Add new child nodes
-    edges.add(newEdges); // Add new edges
+  // // Function to hide or reveal child nodes and edges dynamically
+  // const expandNode = (nodeId) => {
+
+  //   const descendants = findDescendants(nodeId);
+  //   nodes.current.update(descendants.map((id) => ({ id, hidden: false })));
+  //   edges.current.update(edges.current.get({
+  //     filter: (edge) => edge.from === nodeId || descendants.includes(edge.from)
+  //   }).map(edge => ({ ...edge, hidden: false })));
+  // };
+
+  const findNodesBetween = (startNode, endNode) => {
+    const visited = new Set();  // To track visited nodes
+    const queue = [startNode];  // Queue for BFS traversal
+    const pathNodes = [];       // To store the nodes in the path
+  
+    while (queue.length > 0) {
+      const currentNode = queue.shift();  // Dequeue the next node to process
+  
+      // Mark the node as visited
+      if (visited.has(currentNode)) continue;
+      visited.add(currentNode);
+  
+      // Add the current node to the path
+      if ((currentNode !== startNode) && (currentNode !== endNode)) {
+        pathNodes.push(currentNode);
+      }
+      // If we reach the end node, return the path we've found
+      if (currentNode === endNode) {
+        //const pathNodes = pathNodes.filter(item => ![startNode, endNode].includes(item))
+        //return pathNodes.filter(item => ![startNode, endNode].includes(item));
+        return pathNodes;
+      }
+  
+      // Find all edges starting from the current node
+      const connectedEdges = edges.current.get({
+        filter: (edge) => edge.from === currentNode
+      });
+  
+      // Add the connected nodes to the queue
+      connectedEdges.forEach(edge => {
+        if (!visited.has(edge.to)) {
+          queue.push(edge.to);
+        }
+      });
+    }
+  
+    // If no path is found, return an empty array
+    return [];
+  };
+  
+
+  
+  // Function to hide or reveal child nodes and edges dynamically
+  const expandNode = (nodeId) => {
+
+    const descendants = findDescendants(nodeId);
+    const nodesToExpand = []
+    descendants.forEach((descendantId) => {
+      const intermediaries = findNodesBetween(nodeId, descendantId)
+      //console.log(intermediaries)
+      //console.log('expandedNodes')
+      //console.log(expandedNodes.current)
+      console.log(descendantId)
+      console.log(intermediaries)
+      console.log(intermediaries.map(key => expandedNodes.current[key]))
+      if (intermediaries.map(key => expandedNodes.current[key]).every(value => value === true)){
+        nodesToExpand.push(descendantId)
+      }
+    })
+
+    
+    nodes.current.update(nodesToExpand.map((id) => ({ id, hidden: false })));
+    edges.current.update(edges.current.get({
+      filter: (edge) => nodesToExpand.includes(edge.to)
+    }).map(edge => ({ ...edge, hidden: false })));
+
+    // nodes.current.update({ descendantId, hidden: false });
+    // edges.current.update(edges.current.get({
+    //   filter: (edge) => edge.from === nodeId || edge.from === descendantId
+    // }).map(edge => ({ ...edge, hidden: false })));
+
+
+  };
+
+
+  // // Function to hide or reveal child nodes and edges dynamically
+  // const expandNode = (nodeId) => {
+
+  //   const descendants = findDescendants(nodeId);
+
+  //   // Expand nodes only if their direct parent is also expanded
+  //   descendants.forEach((descendantId) => {
+  //     const parentEdge = edges.current.get({
+  //       filter: (edge) => edge.to === descendantId
+  //     })[0];
+      
+  //     if (parentEdge && expandedNodes.current[parentEdge.from]) {
+  //       nodes.current.update({ id: descendantId, hidden: false });
+  //       edges.current.update({ from: parentEdge.from, to: descendantId, hidden: false });
+  //     }
+  //   });
+  // };
+
+  const collapseNode = (nodeId) => {
+    const descendants = findDescendants(nodeId);
+    nodes.current.update(descendants.map((id) => ({ id, hidden: true })));
+    edges.current.update(edges.current.get({
+      filter: (edge) => edge.from === nodeId || descendants.includes(edge.from)
+    }).map(edge => ({ ...edge, hidden: true })));
   };
 
 
   // Function to recursively find all descendant nodes
-  const findDescendants = (nodeId, edges) => {
+  const findDescendants = (nodeId) => {
     const descendants = [];
     const queue = [nodeId]; // Start from the current node
 
     while (queue.length > 0) {
       const currentNode = queue.shift();
-
       // Find all edges originating from the current node
-      const childEdges = edges.get({
+      const childEdges = edges.current.get({
         filter: (edge) => edge.from === currentNode
       });
 
@@ -126,25 +265,76 @@ const GraphComponent = () => {
   };
 
 
-  // Function to remove all descendants of a node dynamically
-  const collapseNode = (nodeId, nodes, edges) => {
-    // Find all descendant nodes (children, grandchildren, etc.)
-    const descendants = findDescendants(nodeId, edges);
-
-    if (descendants.length > 0) {
-      nodes.remove(descendants); // Remove all descendant nodes
-      edges.remove(edges.get({
-        filter: (edge) => descendants.includes(edge.from) || edge.from === nodeId
-      })); // Remove all edges connected to descendants or the parent
-    }
+  // Handle saving the edited label
+  const handleSave = () => {
+    nodes.current.update({ id: selectedNodeId, label: editorContent }); // Update the node label
+    setEditorVisible(false); // Hide the editor
   };
 
 
+  // Add a child node
+  const handleAddChild = () => {
+    const newNodeId = Math.max(...nodes.current.getIds()) + 1; // Generate a new unique node ID
+    const newNode = { id: newNodeId, label: `New Child of ${selectedNodeId}`, color: '#FF7518' };
+    const newEdge = { from: selectedNodeId, to: newNodeId };
+
+    nodes.current.add(newNode);
+    edges.current.add(newEdge);
+    expandedNodes.current[newNodeId] = true;
+  };
+
+
+
+  // Remove selected node and its descendants from the dataset (proper removal)
+  const handleRemoveNode = () => {
+    if (selectedNodeId) {
+      const descendants = findDescendants(selectedNodeId);
+      
+      // Fully remove nodes and edges, so they won't reappear
+      nodes.current.remove([...descendants, selectedNodeId]);
+      edges.current.remove(edges.current.get({
+        filter: (edge) => edge.to === selectedNodeId || descendants.includes(edge.from)
+      }));
+
+      // Remove the node from expandedNodes to avoid it being expanded again
+      delete expandedNodes.current[selectedNodeId];
+      descendants.forEach((descendant) => delete expandedNodes.current[descendant]);
+
+
+
+      setSelectedNodeId(null); // Clear selection after removing
+    }
+  };
 
   return (
     <div>
       <h2>Hacktoberfest 2024</h2>
       <div style={{ height: '500px', width: '100%' }} ref={containerRef} />
+
+      {/* Node control buttons */}
+      {selectedNodeId && (
+        <div className="node-actions">
+          <button onClick={() => setEditorVisible(true)}>Edit Node Text</button>
+          <button onClick={handleAddChild}>Add Child</button>
+          <button onClick={handleRemoveNode}>Remove Node</button>
+        </div>
+      )}
+
+      {editorVisible && (
+        <div className="editor-modal">
+          <ReactQuill theme="snow" value={editorContent} onChange={setEditorContent} />
+          <button onClick={handleSave}>Save</button>
+        </div>
+      )}
+
+
+      {/* {selectedNodeId && nodes.current.get(selectedNodeId) && (
+        <div
+          className="node-label"
+          dangerouslySetInnerHTML={{ __html: nodes.current.get(selectedNodeId).label }}
+        />
+      )} */}
+
     </div>
   );
 };
