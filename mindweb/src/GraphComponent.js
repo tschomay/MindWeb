@@ -247,10 +247,16 @@ const GraphComponent = () => {
     return descendants;
   };
 
-
+  // A helper function to strip HTML tags (if necessary)
+  const stripHtml = (html) => {
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  };
+  
   // Handle saving the edited label
   const handleSave = () => {
-    nodes.current.update({ id: selectedNodeId, label: editorContent }); // Update the node label
+    nodes.current.update({ id: selectedNodeId, label: stripHtml(editorContent) }); // Update the node label
     setEditorVisible(false); // Hide the editor
   };
 
