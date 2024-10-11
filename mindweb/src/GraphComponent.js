@@ -75,7 +75,20 @@ const GraphComponent = () => {
         navigationButtons: true
       },
       physics: {
-        enabled: true
+        enabled: true,
+        stabilization: {
+          iterations: 1000,  // Number of stabilization iterations after any changes
+          updateInterval: 25, // How often to check if stabilization is complete
+        },
+        solver: 'barnesHut',  // Controls how nodes repel each other
+        barnesHut: {
+          gravitationalConstant: -3000,
+          centralGravity: 0.3,
+          springLength: 95,
+          springConstant: 0.1,
+          damping: 0.5,      // Higher damping reduces movement
+          avoidOverlap: 1     // Reduces node overlap
+        }
       }
     };
 
@@ -93,9 +106,11 @@ const GraphComponent = () => {
         if (isExpanded) {
           // If expanded, collapse the node (remove children)
           collapseNode(nodeId);
+          networkInstance.stabilize(10);
         } else {
           // If not expanded, expand the node (add children)
           expandNode(nodeId);
+          networkInstance.stabilize(10);
         }
 
         // Toggle the expanded state
