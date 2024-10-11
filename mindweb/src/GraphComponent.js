@@ -274,9 +274,76 @@ const GraphComponent = () => {
     }
   };
 
+  // Import/export
+  // Function to export the graph state
+  const exportGraph = () => {
+    console.log("Export clicked")
+    const exportedData = {
+      nodes: nodes.current.get(),   // Get all the nodes
+      edges: edges.current.get()    // Get all the edges
+    };
+
+    // Convert the data to JSON string
+    const jsonData = JSON.stringify(exportedData, null, 2);
+
+    // Create a blob and download the JSON file
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'graph.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Function to import the graph state
+const importGraph = (event) => {
+  const file = event.target.files[0]; // Get the uploaded file
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    const importedData = JSON.parse(content);
+
+    // Clear the existing nodes and edges
+    nodes.current.clear();
+    edges.current.clear();
+
+    // Load the imported nodes and edges
+    nodes.current.add(importedData.nodes);
+    edges.current.add(importedData.edges);
+  };
+
+  // Read the file content as a string
+  reader.readAsText(file);
+};
+
+
+
+
   return (
     <div>
       <h2>Hacktoberfest 2024</h2>
+
+      {/* Node control buttons */}
+      <div className="import-export">
+        <button onClick={exportGraph}>Export Web</button>
+
+        {/* Hidden file input for importing */}
+        <input 
+          type="file" 
+          id="importFile" 
+          accept=".json" 
+          style={{ display: 'none' }} 
+          onChange={importGraph} 
+        />
+        {/* Button to trigger the file input */}
+        <button onClick={() => document.getElementById('importFile').click()}>Import Web</button>
+    
+      </div>
+
+
       <div style={{ height: '500px', width: '100%' }} ref={containerRef} />
 
       {/* Node control buttons */}
