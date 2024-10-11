@@ -114,35 +114,15 @@ const GraphComponent = () => {
     });
 
     
-    // // Event listener for editing
-    // networkInstance.on('doubleClick', (params) => {
-    //   if (params.nodes.length) {
-    //     const nodeId = params.nodes[0];
-
-    //     // Open the rich text editor for the selected node
-    //     setSelectedNodeId(nodeId);
-    //     const node = nodes.current.get(nodeId);
-    //     setEditorContent(node.label); // Set the current label as editor content
-    //     setEditorVisible(true); // Show editor
-    //   }
-    // });
 
   }, []);
 
 
-  // // Function to hide or reveal child nodes and edges dynamically
-  // const expandNode = (nodeId) => {
 
-  //   const descendants = findDescendants(nodeId);
-  //   nodes.current.update(descendants.map((id) => ({ id, hidden: false })));
-  //   edges.current.update(edges.current.get({
-  //     filter: (edge) => edge.from === nodeId || descendants.includes(edge.from)
-  //   }).map(edge => ({ ...edge, hidden: false })));
-  // };
-
+  // Traverse up graph to find all nodes between an end and a start
   const findNodesBetween = (startNode, endNode) => {
     const visited = new Set();  // To track visited nodes
-    const queue = [startNode];  // Queue for BFS traversal
+    const queue = [endNode];  // Queue for traversal
     const pathNodes = [];       // To store the nodes in the path
   
     while (queue.length > 0) {
@@ -156,22 +136,20 @@ const GraphComponent = () => {
       if ((currentNode !== startNode) && (currentNode !== endNode)) {
         pathNodes.push(currentNode);
       }
-      // If we reach the end node, return the path we've found
-      if (currentNode === endNode) {
-        //const pathNodes = pathNodes.filter(item => ![startNode, endNode].includes(item))
-        //return pathNodes.filter(item => ![startNode, endNode].includes(item));
+      // If we reach the start node, return the path we've found
+      if (currentNode === startNode) {
         return pathNodes;
       }
   
-      // Find all edges starting from the current node
+      // Find all edges ending at the current node
       const connectedEdges = edges.current.get({
-        filter: (edge) => edge.from === currentNode
+        filter: (edge) => edge.to === currentNode
       });
   
       // Add the connected nodes to the queue
       connectedEdges.forEach(edge => {
-        if (!visited.has(edge.to)) {
-          queue.push(edge.to);
+        if (!visited.has(edge.from)) {
+          queue.push(edge.from);
         }
       });
     }
@@ -186,59 +164,49 @@ const GraphComponent = () => {
   const expandNode = (nodeId) => {
 
     const descendants = findDescendants(nodeId);
+    // If the node has no children, exit the function
+    if (descendants.length === 0) {
+      return;
+    }
     const nodesToExpand = []
     descendants.forEach((descendantId) => {
       const intermediaries = findNodesBetween(nodeId, descendantId)
-      //console.log(intermediaries)
-      //console.log('expandedNodes')
-      //console.log(expandedNodes.current)
-      console.log(descendantId)
-      console.log(intermediaries)
-      console.log(intermediaries.map(key => expandedNodes.current[key]))
       if (intermediaries.map(key => expandedNodes.current[key]).every(value => value === true)){
         nodesToExpand.push(descendantId)
       }
     })
+    // Remove star from node's label when expanded
+    const newLabel = nodes.current.get(nodeId).label.slice(0, -1);
+    nodes.current.update({
+      id: nodeId,
+      //font: { multi: true },
+      label: `${newLabel}`
+    });
 
-    
     nodes.current.update(nodesToExpand.map((id) => ({ id, hidden: false })));
     edges.current.update(edges.current.get({
       filter: (edge) => nodesToExpand.includes(edge.to)
     }).map(edge => ({ ...edge, hidden: false })));
-
-    // nodes.current.update({ descendantId, hidden: false });
-    // edges.current.update(edges.current.get({
-    //   filter: (edge) => edge.from === nodeId || edge.from === descendantId
-    // }).map(edge => ({ ...edge, hidden: false })));
-
-
   };
 
 
-  // // Function to hide or reveal child nodes and edges dynamically
-  // const expandNode = (nodeId) => {
-
-  //   const descendants = findDescendants(nodeId);
-
-  //   // Expand nodes only if their direct parent is also expanded
-  //   descendants.forEach((descendantId) => {
-  //     const parentEdge = edges.current.get({
-  //       filter: (edge) => edge.to === descendantId
-  //     })[0];
-      
-  //     if (parentEdge && expandedNodes.current[parentEdge.from]) {
-  //       nodes.current.update({ id: descendantId, hidden: false });
-  //       edges.current.update({ from: parentEdge.from, to: descendantId, hidden: false });
-  //     }
-  //   });
-  // };
 
   const collapseNode = (nodeId) => {
     const descendants = findDescendants(nodeId);
+    // If the node has no children, exit the function
+    if (descendants.length === 0) {
+      return;
+    }
     nodes.current.update(descendants.map((id) => ({ id, hidden: true })));
     edges.current.update(edges.current.get({
       filter: (edge) => edge.from === nodeId || descendants.includes(edge.from)
     }).map(edge => ({ ...edge, hidden: true })));
+    // Add star to node's label when collapsed
+    nodes.current.update({
+      id: nodeId,
+      //font: { multi: true },
+      label: `${nodes.current.get(nodeId).label}*`
+    });
   };
 
 
